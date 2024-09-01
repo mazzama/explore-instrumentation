@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 	"github.com/go-chi/chi/v5/middleware"
+	"io"
 	"log/slog"
 	"net/http"
-	"os"
 )
 
 const requestIDKey string = "request_id"
@@ -38,9 +38,9 @@ func (h *contextHandler) WithGroup(name string) slog.Handler {
 	}
 }
 
-func NewLogger() *slog.Logger {
+func NewLogger(writer io.Writer) *slog.Logger {
 	return slog.New(&contextHandler{
-		handler: slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		handler: slog.NewJSONHandler(writer, &slog.HandlerOptions{
 			Level: slog.LevelInfo,
 		}),
 	})
@@ -50,7 +50,7 @@ func requestLogger(logger *slog.Logger) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			requestID := r.Context().Value(middleware.RequestIDKey).(string)
-			ctx := context.WithValue(r.Context(), "requestIDKey", requestID)
+			ctx := context.WithValue(r.Context(), requestIDKey, requestID)
 			customLogger := logger.With(slog.String("request_id", requestID))
 
 			customLogger.Info("Request started", slog.String("method", r.Method), slog.String("url", r.URL.String()))

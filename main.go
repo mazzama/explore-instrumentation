@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -14,7 +15,16 @@ import (
 )
 
 func main() {
-	var logger = NewLogger()
+	file, err := os.OpenFile("./logs/app.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
+		slog.Error("Failed to open logs file: ", err)
+		return
+	}
+	defer file.Close()
+
+	multiWriter := io.MultiWriter(os.Stdout, file)
+
+	var logger = NewLogger(multiWriter)
 	slog.SetDefault(logger)
 
 	srv := NewServer(logger)
@@ -46,8 +56,7 @@ func NewServer(logger *slog.Logger) *http.Server {
 }
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {
-	slog.Info("Received the request")
-	slog.InfoContext(r.Context(), "HEHE")
+	slog.InfoContext(r.Context(), "Received the request")
 
 	w.Write([]byte("Hello World!"))
 }
