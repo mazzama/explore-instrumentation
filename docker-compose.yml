@@ -20,6 +20,23 @@ services:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.retention.time=5m'
       - '--storage.tsdb.retention.size=10GB'
+  fluentbit:
+    image: fluent/fluent-bit:3.1.6
+    ports:
+      - "24224:24224"
+      - "24224:24224/udp"
+    volumes:
+      - ./scripts/fluentbit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf
+      - ./logs:/app/logs
+  nginx:
+    image: nginx
+    ports:
+      - "8081:80"
+    logging:
+      driver: fluentd
+      options:
+        tag: nginx
+        fluentd-sub-second-precision: 'true'
 
 volumes:
   grafana_data:
