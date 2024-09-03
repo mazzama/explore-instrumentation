@@ -5,6 +5,8 @@ import (
 	"errors"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"io"
 	"log/slog"
 	"net/http"
@@ -13,6 +15,29 @@ import (
 	"syscall"
 	"time"
 )
+
+var (
+	httpRequestTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "http_requests_total",
+			Help: "Total Number of HTTP Requests",
+		},
+		[]string{"path", "status"},
+	)
+	httpRequestDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "http_request_duration_seconds",
+			Help:    "Histogram of response latency (seconds) of HTTP requests.",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"path", "status"},
+	)
+)
+
+func init() {
+	prometheus.MustRegister(httpRequestTotal)
+	prometheus.MustRegister(httpRequestDuration)
+}
 
 func main() {
 	file, err := os.OpenFile("./logs/app.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
@@ -44,9 +69,11 @@ func NewServer(logger *slog.Logger) *http.Server {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RequestID)
+	r.Use(prometheusMiddleware)
 	r.Use(requestLogger(logger))
 
 	r.Get("/", rootHandler)
+	r.Handle("/metrics", promhttp.Handler())
 
 	return &http.Server{
 		Addr:     ":8080",
@@ -91,4 +118,31 @@ func multiSignalHandler(signal os.Signal) {
 	default:
 		slog.Info("Unhandled/unknown signal")
 	}
+}
+
+type responseWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (rw *responseWriter) WriteHeader(statusCode int) {
+	rw.status = statusCode
+	rw.ResponseWriter.WriteHeader(statusCode)
+}
+
+func prometheusMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+
+		// Capture the response status
+		rw := &responseWriter{w, http.StatusOK}
+		next.ServeHTTP(rw, r)
+
+		duration := time.Since(start).Seconds()
+		path := r.URL.Path
+		status := rw.status
+
+		httpRequestTotal.WithLabelValues(path, http.StatusText(status)).Inc()
+		httpRequestDuration.WithLabelValues(path, http.StatusText(status)).Observe(duration)
+	})
 }
