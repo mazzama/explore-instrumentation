@@ -37,6 +37,8 @@ var (
 func init() {
 	prometheus.MustRegister(httpRequestTotal)
 	prometheus.MustRegister(httpRequestDuration)
+
+	//promauto.NewCounter()
 }
 
 func main() {
@@ -133,13 +135,17 @@ func (rw *responseWriter) WriteHeader(statusCode int) {
 func prometheusMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		path := r.URL.Path
 
 		// Capture the response status
 		rw := &responseWriter{w, http.StatusOK}
 		next.ServeHTTP(rw, r)
+		if path == "/metrics" {
+			return
+		}
 
 		duration := time.Since(start).Seconds()
-		path := r.URL.Path
+
 		status := rw.status
 
 		httpRequestTotal.WithLabelValues(path, http.StatusText(status)).Inc()

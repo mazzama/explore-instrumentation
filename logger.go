@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 )
 
 const requestIDKey string = "request_id"
@@ -49,6 +50,10 @@ func NewLogger(writer io.Writer) *slog.Logger {
 func requestLogger(logger *slog.Logger) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.Contains(r.URL.String(), "/metrics") {
+				next.ServeHTTP(w, r)
+				return
+			}
 			requestID := r.Context().Value(middleware.RequestIDKey).(string)
 			ctx := context.WithValue(r.Context(), requestIDKey, requestID)
 			customLogger := logger.With(slog.String("request_id", requestID))

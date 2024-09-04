@@ -49,6 +49,15 @@ services:
     volumes:
       - ./scripts/loki:/etc/loki
     command: -config.file=/etc/loki/config.yaml
+  node_exporter:
+    image: quay.io/prometheus/node-exporter:latest
+    command:
+      - '--path.rootfs=/host'
+    restart: unless-stopped
+    volumes:
+      - '/:/host:ro,rslave'
+    ports:
+      - "9100:9100"
 
 #  backend-app:
 #    build: .
